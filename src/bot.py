@@ -4,7 +4,7 @@ import telebot
 from dotenv import dotenv_values
 from telebot import types
 
-# import bot_email
+import bot_email
 import lenguages
 from levels import UserLevel
 
@@ -24,9 +24,9 @@ bot = telebot.TeleBot(TOKEN)
 def start(massage):
 
     markup = types.ReplyKeyboardMarkup(resize_keyboard=True)
-    button1 = types.KeyboardButton("Українська")
-    button2 = types.KeyboardButton("English")
-    markup.add(button1, button2)
+    button_ukr = types.KeyboardButton("Українська")
+    button_eng = types.KeyboardButton("English")
+    markup.add(button_ukr, button_eng)
     greeting = "Оберіть мову спілкування"
     bot.send_message(massage.chat.id, greeting, reply_markup=markup)
     test_id = massage.chat.id
@@ -54,6 +54,7 @@ def lets_go(message):
         """ send result for user and if username exists - for teacher to"""
 
         if message.text == lenguages.TextLanguage.button_get_result:
+
             user_level = UserLevel.get_level(CHATS[message.chat.id].count_right_answers)
             bot.send_message(
                 message.chat.id,
@@ -68,15 +69,20 @@ def lets_go(message):
             markup = types.ReplyKeyboardMarkup(resize_keyboard=True)
             button_start = types.KeyboardButton("/start")
             markup.add(button_start)
-            bot.send_message(message.chat.id, lenguages.TextLanguage.start, reply_markup=markup)
+            bot.send_message(
+                message.chat.id, lenguages.TextLanguage.start, reply_markup=markup
+            )
+            bot_email.send_email(
+                CHATS[message.chat.id].user_answers,
+                message.from_user.username,
+                message.from_user.first_name,
+                message.from_user.last_name,
+            )
             CHATS.pop(message.chat.id)
-
-
-            # доделать если нет юзернэйма
 
         if message.chat.id in CHATS:
 
-            """ test process """
+            """test process"""
 
             if (
                 CHATS[message.chat.id].question_counter
@@ -114,7 +120,7 @@ def lets_go(message):
 
             else:
 
-                """ end of test, get result, request for contact and send to teacher """
+                """end of test, get result, request for contact and send to teacher"""
 
                 CHATS[message.chat.id].add_user_answers(message.text)
 
@@ -130,15 +136,16 @@ def lets_go(message):
                         reply_markup=markup,
                     )
                 else:
-                    markup = types.ReplyKeyboardMarkup(resize_keyboard=True, row_width=2)
+                    markup = types.ReplyKeyboardMarkup(
+                        resize_keyboard=True, row_width=2
+                    )
                     button_result = types.KeyboardButton(
                         lenguages.TextLanguage.button_get_result
                     )
-                    button_start = types.KeyboardButton("/start")
                     button_teacher = types.KeyboardButton(
                         lenguages.TextLanguage.result_to_teacher, request_contact=True
                     )
-                    markup.add(button_result, button_start, button_teacher)
+                    markup.add(button_result, button_teacher)
                     bot.send_message(
                         message.chat.id,
                         lenguages.TextLanguage.question_result,
@@ -148,21 +155,29 @@ def lets_go(message):
         print(CHATS)
         print(message.from_user.id)
 
-@bot.message_handler(content_types=['contact'])
+
+@bot.message_handler(content_types=["contact"])
 def contact(message):
     user_level = UserLevel.get_level(CHATS[message.chat.id].count_right_answers)
-    # bot_email.send_email(CHATS[message.chat.id].user_answers)
+
     bot.send_message(message.chat.id, f"{lenguages.TextLanguage.result}: {user_level}")
-    bot.send_message(TEACHER_CHAT_ID, (u"\U0001F33C" * 9))
-    bot.send_contact(TEACHER_CHAT_ID, f"{message.contact.phone_number}",
-                        f"{user_level}\n",
-                        f"{message.contact.first_name} {message.contact.last_name}")
+    bot.send_message(TEACHER_CHAT_ID, ("\U0001F33C" * 9))
+    bot.send_contact(
+        TEACHER_CHAT_ID,
+        f"{message.contact.phone_number}",
+        f"{user_level}\n",
+        f"{message.contact.first_name} {message.contact.last_name}",
+    )
     markup = types.ReplyKeyboardMarkup(resize_keyboard=True)
     button_start = types.KeyboardButton("/start")
     markup.add(button_start)
     bot.send_message(message.chat.id, lenguages.TextLanguage.start, reply_markup=markup)
+    bot_email.send_email(
+        CHATS[message.chat.id].user_answers,
+        message.contact.first_name,
+        message.contact.phone_number,
+    )
     CHATS.pop(message.chat.id)
-
 
     print(CHATS)
     print(message.from_user.id)
