@@ -4,7 +4,7 @@ import telebot
 from dotenv import dotenv_values
 from telebot import types
 
-# import bot_email
+import bot_email
 import lenguages
 from levels import UserLevel
 
@@ -24,9 +24,9 @@ bot = telebot.TeleBot(TOKEN)
 def start(massage):
 
     markup = types.ReplyKeyboardMarkup(resize_keyboard=True)
-    button1 = types.KeyboardButton("Українська")
-    button2 = types.KeyboardButton("English")
-    markup.add(button1, button2)
+    button_ukr = types.KeyboardButton("Українська")
+    button_eng = types.KeyboardButton("English")
+    markup.add(button_ukr, button_eng)
     greeting = "Оберіть мову спілкування"
     bot.send_message(massage.chat.id, greeting, reply_markup=markup)
     test_id = massage.chat.id
@@ -51,7 +51,10 @@ def lets_go(message):
         if message.text == CHATS[message.chat.id].right_answer:
             CHATS[message.chat.id].count_right_answers += 1
 
+        """ send result for user and if username exists - for teacher to"""
+
         if message.text == lenguages.TextLanguage.button_get_result:
+
             user_level = UserLevel.get_level(CHATS[message.chat.id].count_right_answers)
             bot.send_message(
                 message.chat.id,
@@ -63,26 +66,24 @@ def lets_go(message):
                     TEACHER_CHAT_ID,
                     f"@{message.from_user.username}\n{user_level}",
                 )
-
-            else:
-                markup = types.ReplyKeyboardMarkup(resize_keyboard=True, row_width=2)
-                button11 = types.KeyboardButton(
-                    lenguages.TextLanguage.button_get_result
-                )
-                button12 = types.KeyboardButton("/start")
-                button13 = types.KeyboardButton(
-                    lenguages.TextLanguage.result_to_teacher, request_contact=True
-                )
-                markup.add(button11, button12, button13)
-                bot.send_message(
-                    message.chat.id,
-                    lenguages.TextLanguage.question_result,
-                    reply_markup=markup,
-                )
-
-            # доделать если нет юзернэйма
+            markup = types.ReplyKeyboardMarkup(resize_keyboard=True)
+            button_start = types.KeyboardButton("/start")
+            markup.add(button_start)
+            bot.send_message(
+                message.chat.id, lenguages.TextLanguage.start, reply_markup=markup
+            )
+            bot_email.send_email(
+                CHATS[message.chat.id].user_answers,
+                message.from_user.username,
+                message.from_user.first_name,
+                message.from_user.last_name,
+            )
+            CHATS.pop(message.chat.id)
 
         if message.chat.id in CHATS:
+
+            """test process"""
+
             if (
                 CHATS[message.chat.id].question_counter
                 < CHATS[message.chat.id].questions_left
@@ -118,22 +119,68 @@ def lets_go(message):
                     CHATS[message.chat.id].change_right_answer()
 
             else:
+
+                """end of test, get result, request for contact and send to teacher"""
+
                 CHATS[message.chat.id].add_user_answers(message.text)
-                if message.text != lenguages.TextLanguage.button_get_result:
-                    if message.from_user.username:
-                        markup = types.ReplyKeyboardMarkup(resize_keyboard=True)
-                        button_result = types.KeyboardButton(
-                            lenguages.TextLanguage.button_get_result
-                        )
-                        markup.add(button_result)
-                        bot.send_message(
-                            message.chat.id,
-                            lenguages.TextLanguage.question_result,
-                            reply_markup=markup,
-                        )
+
+                if message.from_user.username:
+                    markup = types.ReplyKeyboardMarkup(resize_keyboard=True)
+                    button_result = types.KeyboardButton(
+                        lenguages.TextLanguage.button_get_result
+                    )
+                    markup.add(button_result)
+                    bot.send_message(
+                        message.chat.id,
+                        lenguages.TextLanguage.question_result,
+                        reply_markup=markup,
+                    )
+                else:
+                    markup = types.ReplyKeyboardMarkup(
+                        resize_keyboard=True, row_width=2
+                    )
+                    button_result = types.KeyboardButton(
+                        lenguages.TextLanguage.button_get_result
+                    )
+                    button_teacher = types.KeyboardButton(
+                        lenguages.TextLanguage.result_to_teacher, request_contact=True
+                    )
+                    markup.add(button_result, button_teacher)
+                    bot.send_message(
+                        message.chat.id,
+                        lenguages.TextLanguage.question_result,
+                        reply_markup=markup,
+                    )
 
         print(CHATS)
         print(message.from_user.id)
+
+
+@bot.message_handler(content_types=["contact"])
+def contact(message):
+    user_level = UserLevel.get_level(CHATS[message.chat.id].count_right_answers)
+
+    bot.send_message(message.chat.id, f"{lenguages.TextLanguage.result}: {user_level}")
+    bot.send_message(TEACHER_CHAT_ID, ("\U0001F33C" * 9))
+    bot.send_contact(
+        TEACHER_CHAT_ID,
+        f"{message.contact.phone_number}",
+        f"{user_level}\n",
+        f"{message.contact.first_name} {message.contact.last_name}",
+    )
+    markup = types.ReplyKeyboardMarkup(resize_keyboard=True)
+    button_start = types.KeyboardButton("/start")
+    markup.add(button_start)
+    bot.send_message(message.chat.id, lenguages.TextLanguage.start, reply_markup=markup)
+    bot_email.send_email(
+        CHATS[message.chat.id].user_answers,
+        message.contact.first_name,
+        message.contact.phone_number,
+    )
+    CHATS.pop(message.chat.id)
+
+    print(CHATS)
+    print(message.from_user.id)
 
 
 if __name__ == "__main__":
